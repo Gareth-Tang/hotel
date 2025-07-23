@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>酒店管理系统</title>
+    <style>
+        body { font-family: "Microsoft YaHei", sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .container { margin: 30px 0; }
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        th, td { padding: 12px; border: 1px solid #ddd; text-align: left; }
+        th { background-color: #f5f5f5; }
+        .form-group { margin: 10px 0; }
+        label { display: inline-block; width: 120px; }
+        input, select { padding: 8px; width: 250px; box-sizing: border-box; }
+        button { padding: 8px 16px; margin: 5px; cursor: pointer; }
+        .success { color: green; }
+        .error { color: red; }
+        .action-btn { margin: 0 5px; }
+    </style>
+</head>
+<body>
+    <h1>酒店管理系统</h1>
+
+    <!-- 添加酒店表单 -->
+    <div class="container">
+        <h2>添加新酒店</h2>
+        <div class="form-group">
+            <label>酒店名称：</label>
+            <input type="text" id="hotelName" placeholder="例如：阳光酒店">
+        </div>
+        <div class="form-group">
+            <label>所在位置：</label>
+            <input type="text" id="hotelLocation" placeholder="例如：北京市朝阳区">
+        </div>
+        <div class="form-group">
+            <label>星级：</label>
+            <select id="hotelStars">
+                <option value="1">1星</option>
+                <option value="2">2星</option>
+                <option value="3">3星</option>
+                <option value="4">4星</option>
+                <option value="5">5星</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>是否有泳池：</label>
+            <select id="hotelPool">
+                <option value="true">是</option>
+                <option value="false">否</option>
+            </select>
+        </div>
+        <button onclick="addHotel()">添加酒店</button>
+        <div id="addMessage"></div>
+    </div>
+
+    <!-- 酒店列表 -->
+    <div class="container">
+        <h2>酒店列表</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>酒店名称</th>
+                    <th>位置</th>
+                    <th>星级</th>
+                    <th>是否有泳池</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody id="hotelTableBody"></tbody>
+        </table>
+    </div>
+
+    <!-- 编辑酒店弹窗（默认隐藏） -->
+    <div id="editModal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); border: 1px solid #ccc; padding: 20px; background: white; z-index: 100;">
+        <h3>编辑酒店</h3>
+        <input type="hidden" id="editHotelId">
+        <div class="form-group">
+            <label>酒店名称：</label>
+            <input type="text" id="editHotelName">
+        </div>
+        <div class="form-group">
+            <label>所在位置：</label>
+            <input type="text" id="editHotelLocation">
+        </div>
+        <div class="form-group">
+            <label>星级：</label>
+            <select id="editHotelStars">
+                <option value="1">1星</option>
+                <option value="2">2星</option>
+                <option value="3">3星</option>
+                <option value="4">4星</option>
+                <option value="5">5星</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>是否有泳池：</label>
+            <select id="editHotelPool">
+                <option value="true">是</option>
+                <option value="false">否</option>
+            </select>
+        </div>
+        <button onclick="saveEdit()">保存</button>
+        <button onclick="document.getElementById('editModal').style.display='none'">取消</button>
+    </div>
+
+    <script>
+        const apiUrl = "http://localhost:3000";
+
+        // 页面加载时获取所有酒店
+        window.onload = loadHotels;
+
+        // 1. 加载酒店列表
+        async function loadHotels() {
+            try {
+                const response = await fetch(`${apiUrl}/hotels`);
+                if (!response.ok) throw new Error("获取酒店列表失败");
+                const hotels = await response.json();
+                const tableBody = document.getElementById("hotelTableBody");
+                tableBody.innerHTML = hotels.map(hotel => `
+                    <tr>
+                        <td>${hotel.id}</td>
+                        <td>${hotel.name}</td>
+                        <td>${hotel.location}</td>
+                        <td>${hotel.star_rating}星</td>
+                        <td>${hotel.has_pool ? "是" : "否"}</td>
+                        <td>
+                            <button class="action-btn" onclick="showEditModal(${hotel.id}, '${hotel.name}', '${hotel.location}', ${hotel.star_rating}, ${hotel.has_pool})">编辑</button>
+                            <button class="action-btn" onclick="deleteHotel(${hotel.id})">删除</button>
+                        </td>
+                    </tr>
+                `).join("");
+            } catch (err) {
+                document.getElementById("hotelTableBody").innerHTML = `<tr><td colspan="6" class="error">${err.message}</td></tr>`;
+            }
+        }
+
+        // 2. 添加酒店
+        async function addHotel() {
+            const name = document.getElementById("hotelName").value.trim();
+            const location = document.getElementById("hotelLocation").value.trim();
+            const star_rating = parseInt(document.getElementById("hotelStars").value);
+            const has_pool = document.getElementById("hotelPool").value === "true";
+            const messageDiv = document.getElementById("addMessage");
+
+            if (!name || !location) {
+                messageDiv.textContent = "酒店名称和地址不能为空！";
+                messageDiv.className = "error";
+                return;
+            }
+
+            try {
+                const response = await fetch(`${apiUrl}/add-hotel`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ name, location, star_rating, has_pool })
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error);
+                
+                messageDiv.textContent = data.message;
+                messageDiv.className = "success";
+                // 清空表单
+                document.getElementById("hotelName").value = "";
+                document.getElementById("hotelLocation").value = "";
+                loadHotels(); // 刷新列表
+            } catch (err) {
+                messageDiv.textContent = err.message;
+                messageDiv.className = "error";
+            }
+        }
+
+        // 3. 显示编辑弹窗
+        function showEditModal(id, name, location, stars, hasPool) {
+            document.getElementById("editHotelId").value = id;
+            document.getElementById("editHotelName").value = name;
+            document.getElementById("editHotelLocation").value = location;
+            document.getElementById("editHotelStars").value = stars;
+            document.getElementById("editHotelPool").value = hasPool;
+            document.getElementById("editModal").style.display = "block";
+        }
+
+        // 4. 保存编辑
+        async function saveEdit() {
+            const id = parseInt(document.getElementById("editHotelId").value);
+            const name = document.getElementById("editHotelName").value.trim();
+            const location = document.getElementById("editHotelLocation").value.trim();
+            const star_rating = parseInt(document.getElementById("editHotelStars").value);
+            const has_pool = document.getElementById("editHotelPool").value === "true";
+
+            try {
+                const response = await fetch(`${apiUrl}/update-hotel/${id}`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ name, location, star_rating, has_pool })
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error);
+                
+                document.getElementById("editModal").style.display = "none";
+                loadHotels(); // 刷新列表
+            } catch (err) {
+                alert(err.message);
+            }
+        }
+
+        // 5. 删除酒店
+        async function deleteHotel(id) {
+            if (!confirm(`确定要删除 ID 为 ${id} 的酒店吗？`)) return;
+
+            try {
+                const response = await fetch(`${apiUrl}/delete-hotel/${id}`, { method: "DELETE" });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error);
+                
+                loadHotels(); // 刷新列表
+            } catch (err) {
+                alert(err.message);
+            }
+        }
+    </script>
+</body>
+</html>
